@@ -1,10 +1,9 @@
-import { createWriteStream, existsSync } from "node:fs";
-import { stat } from "node:fs/promises";
-import { basename, join } from "node:path";
-import archiver from "archiver";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { withLock } from "./lock.js";
 import { addLog, DROPS_DIR, loadState, updateState } from "./store.js";
 import { formatBytes, publishAll, uploadMirrors } from "./channels.js";
+import { packVault } from "./pack.js";
 import { notifyOperator } from "./telegram.js";
 import { debug } from "./net.js";
 import { langOf } from "./ops.js";
@@ -22,7 +21,12 @@ async function fireLocked(reason) {
 
   let zipPath = state.lastTrigger?.zipPath;
   let packed = state.lastTrigger
-    ? { size: state.lastTrigger.size, files: state.lastTrigger.files || [], tamper: state.lastTrigger.tamper || [] }
+    ? {
+        size: state.lastTrigger.size,
+        files: state.lastTrigger.files || [],
+        tamper: state.lastTrigger.tamper || [],
+        kinds: state.lastTrigger.kinds || [],
+      }
     : null;
 
   if (!zipPath || !existsSync(zipPath)) {
@@ -44,6 +48,7 @@ async function fireLocked(reason) {
     size: packed.size,
     files: packed.files,
     tamper: packed.tamper || [],
+    kinds: packed.kinds || [],
     mirrors,
     reason,
     complete: false,
@@ -81,43 +86,4 @@ function mergeMirrors(prev = [], next = []) {
     if (m?.url) map.set(m.url, m);
   }
   return [...map.values()];
-}
-
-function packVault(vault, zipPath) {
-  return new Promise((resolve, reject) => {
-    const output = createWriteStream(zipPath);
-    const archive = archiver("zip", { zlib: { level: 9 } });
-    const files = [];
-    const tamper = [];
-    output.on("close", async () => {
-      const info = await stat(zipPath);
-      resolve({ size: info.size, files, tamper });
-    });
-    archive.on("warning", (err) => {
-      if (err.code !== "ENOENT") reject(err);
-    });
-    archive.on("error", reject);
-    archive.pipe(output);
-    if (!vault.length) {
-      archive.append("vault empty\n", { name: "EMPTY.txt" });
-    }
-    for (const item of vault) {
-      files.push(item.path);
-      if (!existsSync(item.path)) {
-        tamper.push(item.path);
-        continue;
-      }
-      const name = basename(item.path);
-      if (item.type === "dir") archive.directory(item.path, name);
-      else archive.file(item.path, { name });
-    }
-    if (tamper.length) {
-      archive.append(`${tamper.join("\n")}\n`, { name: "TAMPER.txt" });
-    }
-    archive.append(
-      JSON.stringify({ at: Date.now(), files, tamper }, null, 2),
-      { name: "MANIFEST.json" }
-    );
-    archive.finalize();
-  });
 }

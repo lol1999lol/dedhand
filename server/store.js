@@ -188,9 +188,12 @@ export function summarize(state) {
       ? {
           at: state.lastTrigger.at,
           size: state.lastTrigger.size,
+          files: state.lastTrigger.files,
+          kinds: state.lastTrigger.kinds,
           mirrors: state.lastTrigger.mirrors,
           results: state.lastTrigger.results,
           complete: state.lastTrigger.complete,
+          reason: state.lastTrigger.reason,
         }
       : null,
     logs: state.logs.slice(0, 30),

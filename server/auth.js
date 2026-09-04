@@ -3,7 +3,8 @@ import { promisify } from "node:util";
 import { AppError } from "./errors.js";
 
 const scryptAsync = promisify(scrypt);
-const PARAMS = { N: 32768, r: 8, p: 1 };
+// N=32768,r=8 needs 128*N*r = 32MiB; OpenSSL rejects maxmem equal to that.
+const PARAMS = { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 
 export function assertStrongPassword(password) {
   const p = String(password || "");

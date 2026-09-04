@@ -1,10 +1,12 @@
 #!/usr/bin/env node
+/** DEDHAND by lol1999lol — https://github.com/lol1999lol/dedhand */
 import readline from "node:readline";
+import { spawnSync } from "node:child_process";
 import { stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { hashPassword } from "../server/auth.js";
-import { testChannel } from "../server/channels.js";
+import { formatBytes, testChannel } from "../server/channels.js";
 import { runDaemon, removeUserUnit, writeUserUnit } from "../server/daemon.js";
 import { inspectPath, vaultBroken } from "../server/fs.js";
 import {
@@ -16,6 +18,7 @@ import {
   remainingLabel,
   t,
 } from "../server/i18n.js";
+import { AUTHOR } from "../server/meta.js";
 import { changePassword, checkin, disarm, langOf, verifyOrThrow } from "../server/ops.js";
 import { tick } from "../server/scheduler.js";
 import { addLog, DATA_DIR, loadState, summarize, updateState } from "../server/store.js";
@@ -49,10 +52,14 @@ async function main(command) {
       console.log(banner());
       console.log(t(lang, "help").trim());
       return;
+    case "guide":
+    case "quickstart":
+      await cmdGuide(lang);
+      return;
     case "version":
     case "-v":
     case "--version":
-      console.log(VERSION);
+      console.log(`${VERSION}  by ${AUTHOR.name}  ${AUTHOR.repo}`);
       return;
     case "langs":
       console.log(`${t(lang, "langs_title")}: ${LOCALES.join(" ")}`);
@@ -67,6 +74,7 @@ async function main(command) {
       await runDaemon();
       return;
     case "setup":
+    case "init":
       await cmdSetup(lang);
       return;
     case "install-service":
@@ -94,7 +102,7 @@ async function main(command) {
       await cmdLogs(lang);
       return;
     case "add":
-      await cmdAdd(opts._[0], lang);
+      await cmdAdd(opts._, lang);
       return;
     case "rm":
       await cmdRm(opts._[0], lang);
@@ -181,11 +189,25 @@ async function cmdDoctor(lang) {
   if (major < 20) issues.push(t(lang, "doctor_node", { have: process.versions.node }));
   if (!state.setupComplete) issues.push(t(lang, "doctor_not_setup"));
   if (!Object.values(state.channels).some((c) => c.enabled)) issues.push(t(lang, "doctor_no_channel"));
+  const notes = [];
   for (const item of state.vault) {
     try {
       await stat(item.path);
     } catch {
       issues.push(t(lang, "doctor_vault_missing", { path: item.path }));
+      continue;
+    }
+    if (item.kind === "database") {
+      notes.push(t(lang, "doctor_db_live", { path: item.path }));
+    }
+    if (item.size && item.size > 24 * 1024 * 1024) {
+      notes.push(
+        t(lang, "doctor_large", {
+          kind: item.kind || item.type,
+          path: item.path,
+          size: formatBytes(item.size),
+        })
+      );
     }
   }
   const drift = await vaultBroken(state.vault);
@@ -206,49 +228,124 @@ async function cmdDoctor(lang) {
     return;
   }
   console.log(t(lang, "doctor_ok"));
+  for (const line of notes) console.log(`- ${line}`);
 }
 
 async function cmdSetup(lang) {
   const state = await loadState();
   if (state.setupComplete) throw new Error(t(lang, "already_setup"));
-  const operatorName = await ask(t(lang, "ask_name"));
-  const p1 = await secret(t(lang, "ask_pass"));
-  const p2 = await secret(t(lang, "ask_pass2"));
+  const operatorName = String(opts.name || process.env.DEDHAND_NAME || (await ask(t(lang, "ask_name")))).trim();
+  const p1 = process.env.DEDHAND_PASS || (await secret(t(lang, "ask_pass")));
+  const p2 = process.env.DEDHAND_PASS || (await secret(t(lang, "ask_pass2")));
   if (p1 !== p2) throw new Error(t(lang, "pass_mismatch"));
-  const hours = Number((await ask(t(lang, "ask_hours"))) || "24");
-  const token = await secret(t(lang, "ask_tg_token"));
-  const chatId = token ? await ask(t(lang, "ask_tg_chat")) : "";
+  const hoursRaw = opts.hours || process.env.DEDHAND_HOURS || (await ask(t(lang, "ask_hours"))) || "24";
+  const hours = Number(hoursRaw) || 24;
+  const token = process.env.DEDHAND_TG_TOKEN || (await optionalSecret(t(lang, "ask_tg_token")));
+  const chatId = token
+    ? String(process.env.DEDHAND_TG_CHAT || opts.chat || (await ask(t(lang, "ask_tg_chat")))).trim()
+    : "";
   const hash = await hashPassword(p1);
   await updateState((s) => {
     s.setupComplete = true;
     s.password = hash;
-    s.operatorName = operatorName.trim();
+    s.operatorName = operatorName || AUTHOR.name;
     s.locale = lang;
     s.intervalMs = Math.max(60 * 1000, hours * 3600 * 1000);
     s.message = t(lang, "default_message");
     if (token && chatId) {
-      s.channels.telegram = { enabled: true, token, chatId: chatId.trim() };
+      s.channels.telegram = { enabled: true, token, chatId };
     }
     return s;
   });
   await addLog("info", t(lang, "setup_done"));
-  console.log(`\n${t(lang, "home")}: ${DATA_DIR}`);
-  console.log(t(lang, "setup_next"));
-  console.log("  node bin/dedhand.js add /path/to/files");
-  console.log("  node bin/dedhand.js arm");
-  console.log("  node bin/dedhand.js install-service");
-  console.log(t(lang, "tg_hint"));
+  console.log(`${t(lang, "home")}: ${DATA_DIR}`);
+  await cmdGuide(lang);
+}
+
+async function cmdGuide(lang) {
+  const state = await loadState();
+  const hasChannel = Object.values(state.channels).some((c) => c.enabled);
+  const steps = [
+    { ok: state.setupComplete, label: t(lang, "guide_step_setup"), cmd: "node bin/dedhand.js setup" },
+    {
+      ok: state.vault.length > 0,
+      label: t(lang, "guide_step_add"),
+      cmd: "node bin/dedhand.js add ./backup.zip ./dump.sql ./app.sqlite",
+    },
+    {
+      ok: hasChannel,
+      label: t(lang, "guide_step_channel"),
+      cmd: "node bin/dedhand.js telegram --token BOT --chat CHATID\n     node bin/dedhand.js ntfy --topic your-private-topic",
+    },
+    {
+      ok: state.setupComplete,
+      label: t(lang, "guide_step_doctor"),
+      cmd: "node bin/dedhand.js doctor",
+    },
+    {
+      ok: state.armed,
+      label: t(lang, "guide_step_arm"),
+      cmd: "node bin/dedhand.js arm",
+    },
+    {
+      ok: false,
+      label: t(lang, "guide_step_service"),
+      cmd: "node bin/dedhand.js install-service",
+      skipMark: !state.armed,
+    },
+    {
+      ok: Boolean(state.lastCheckIn),
+      label: t(lang, "guide_step_checkin"),
+      cmd: "node bin/dedhand.js checkin",
+    },
+  ];
+  console.log(banner());
+  console.log(row(t(lang, "author"), AUTHOR.name));
+  console.log(row(t(lang, "repo"), AUTHOR.clone));
+  console.log("");
+  for (const step of steps) {
+    const mark = step.skipMark ? "·" : step.ok ? "✓" : "→";
+    console.log(`  ${mark}  ${step.label}`);
+    if (!step.ok && !step.skipMark) console.log(`     ${step.cmd}`);
+  }
+  console.log("");
+  if (state.triggered) console.log(t(lang, "guide_fired"));
+  else if (state.armed && hasChannel && state.vault.length) console.log(t(lang, "guide_done"));
 }
 
 async function cmdInstall() {
+  const lang = await currentLang();
   const info = await writeUserUnit();
   console.log(banner());
+  const enabled = enableUserUnits(info.unit);
+  if (enabled) {
+    console.log(t(lang, "install_ok"));
+    console.log(info.servicePath);
+    console.log(info.timerPath);
+    return;
+  }
+  console.log(t(lang, "install_manual"));
   console.log(info.servicePath);
   console.log(info.timerPath);
   console.log("systemctl --user daemon-reload");
   console.log(`systemctl --user enable --now ${info.unit}.service`);
   console.log(`systemctl --user enable --now ${info.unit}.timer`);
   console.log("loginctl enable-linger \"$USER\"");
+}
+
+function enableUserUnits(unit) {
+  const steps = [
+    ["systemctl", ["--user", "daemon-reload"]],
+    ["systemctl", ["--user", "enable", "--now", `${unit}.service`]],
+    ["systemctl", ["--user", "enable", "--now", `${unit}.timer`]],
+  ];
+  for (const [bin, args] of steps) {
+    const r = spawnSync(bin, args, { encoding: "utf8" });
+    if (r.error || r.status !== 0) return false;
+  }
+  const user = process.env.USER || process.env.LOGNAME;
+  if (user) spawnSync("loginctl", ["enable-linger", user], { encoding: "utf8" });
+  return true;
 }
 
 async function cmdUninstall() {
@@ -261,6 +358,8 @@ async function cmdUninstall() {
 
 async function cmdWhich(lang) {
   console.log(banner());
+  console.log(row(t(lang, "author"), AUTHOR.name));
+  console.log(row(t(lang, "repo"), AUTHOR.repo));
   console.log(row("node", process.version));
   console.log(row(t(lang, "status_home"), DATA_DIR));
   console.log(row("bin", join(dirname(fileURLToPath(import.meta.url)))));
@@ -270,6 +369,8 @@ async function cmdExport(lang) {
   const state = await loadState();
   const body = {
     version: VERSION,
+    author: AUTHOR.name,
+    repo: AUTHOR.repo,
     lang,
     ...summarize(state),
   };
@@ -296,6 +397,7 @@ async function cmdStatus(lang) {
   const mode = s.triggered ? "FIRED" : s.armed ? "ARMED" : "IDLE";
   console.log(banner());
   console.log(row("mode", mode));
+  console.log(row(t(lang, "author"), AUTHOR.name));
   console.log(row(t(lang, "status_lang"), lang));
   console.log(row(t(lang, "status_home"), s.home));
   console.log(row(t(lang, "status_setup"), s.setupComplete));
@@ -306,7 +408,7 @@ async function cmdStatus(lang) {
   console.log(`  ${t(lang, "status_vault")}`);
   if (!s.vault.length) console.log(`  ${t(lang, "empty")}`);
   for (const item of s.vault) {
-    console.log(`  ${item.id.slice(0, 8)}  ${item.type}  ${item.path}`);
+    console.log(`  ${item.id.slice(0, 8)}  ${(item.kind || item.type).padEnd(8)}  ${item.path}${item.size != null ? `  ${formatBytes(item.size)}` : ""}`);
   }
   console.log(`  ${t(lang, "status_channels")}`);
   for (const [k, on] of Object.entries(s.channelFlags)) {
@@ -321,16 +423,25 @@ async function cmdLogs(lang) {
   }
 }
 
-async function cmdAdd(path, lang) {
-  if (!path) throw new Error(t(lang, "need_path"));
-  const item = await inspectPath(path);
-  await updateState((s) => {
-    if (s.vault.some((v) => v.path === item.path)) return s;
-    s.vault.push({ id: crypto.randomUUID(), ...item, addedAt: Date.now() });
-    return s;
-  });
-  await addLog("info", t(lang, "vault_log", { path: item.path }));
-  console.log(t(lang, "added", { path: item.path }));
+async function cmdAdd(paths, lang) {
+  const list = (paths || []).map((p) => String(p).trim()).filter(Boolean);
+  if (!list.length) throw new Error(t(lang, "need_path"));
+  for (const path of list) {
+    const item = await inspectPath(path);
+    await updateState((s) => {
+      if (s.vault.some((v) => v.path === item.path)) return s;
+      s.vault.push({ id: crypto.randomUUID(), ...item, addedAt: Date.now() });
+      return s;
+    });
+    await addLog("info", t(lang, "vault_log", { path: item.path }));
+    console.log(
+      t(lang, "added", {
+        kind: item.kind,
+        path: item.path,
+        size: item.size != null ? formatBytes(item.size) : item.type,
+      })
+    );
+  }
 }
 
 async function cmdRm(id, lang) {
@@ -438,6 +549,7 @@ async function cmdArm(lang) {
   });
   await addLog("warn", t(lang, "armed_log"));
   console.log(t(lang, "armed"));
+  console.log(t(lang, "armed_next"));
 }
 
 async function cmdFire(lang) {
@@ -475,6 +587,15 @@ function ask(q) {
 
 function secret(q) {
   if (process.env.DEDHAND_PASS) return Promise.resolve(process.env.DEDHAND_PASS);
+  return secretPrompt(q);
+}
+
+function optionalSecret(q) {
+  if (!process.stdin.isTTY) return Promise.resolve("");
+  return secretPrompt(q);
+}
+
+function secretPrompt(q) {
   if (!process.stdin.isTTY) return ask(q);
   return new Promise((resolve) => {
     const stdin = process.stdin;

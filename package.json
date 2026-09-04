@@ -1,9 +1,12 @@
 {
   "name": "dedhand",
-  "version": "2.0.0",
+  "version": "2.2.0",
   "private": false,
   "license": "MIT",
-  "author": "lol1999lol",
+  "author": {
+    "name": "lol1999lol",
+    "url": "https://github.com/lol1999lol"
+  },
   "homepage": "https://github.com/lol1999lol/dedhand",
   "repository": {
     "type": "git",
@@ -12,7 +15,7 @@
   "bugs": {
     "url": "https://github.com/lol1999lol/dedhand/issues"
   },
-  "description": "Headless dead-hand daemon. No web UI, no inbound ports. Check in or publish to channels you own.",
+  "description": "DEDHAND by lol1999lol. Headless dead-hand daemon. No web UI, no inbound ports. Check in or publish to channels you own.",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -31,6 +34,7 @@
   "scripts": {
     "start": "node bin/dedhand.js daemon",
     "setup": "node bin/dedhand.js setup",
+    "guide": "node bin/dedhand.js guide",
     "status": "node bin/dedhand.js status",
     "doctor": "node bin/dedhand.js doctor",
     "test": "node scripts/check.mjs"
@@ -38,8 +42,16 @@
   "keywords": [
     "dead-hand",
     "dead-man-switch",
+    "deadmanswitch",
     "daemon",
     "telegram",
+    "discord",
+    "ntfy",
+    "sqlite",
+    "backup",
+    "nodejs",
+    "cli",
+    "systemd",
     "security"
   ],
   "dependencies": {

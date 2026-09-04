@@ -29,4 +29,37 @@ if (help.status !== 0) {
 }
 
 if (failed) process.exit(1);
+
+const tmp = join(root, ".tmp-check");
+process.env.DEDHAND_HOME = tmp;
+const { mkdir, writeFile, rm } = await import("node:fs/promises");
+await mkdir(tmp, { recursive: true });
+try {
+  const { classify } = await import(join(root, "server/kind.js"));
+  const { inspectPath } = await import(join(root, "server/fs.js"));
+  const { packVault } = await import(join(root, "server/pack.js"));
+  const zipSample = join(tmp, "backup.zip");
+  const sqlSample = join(tmp, "dump.sql");
+  const dbSample = join(tmp, "app.sqlite");
+  await writeFile(zipSample, Buffer.from([0x50, 0x4b, 0x03, 0x04, 0, 0, 0, 0]));
+  await writeFile(sqlSample, "CREATE TABLE t(id int);\n");
+  await writeFile(dbSample, Buffer.concat([Buffer.from("SQLite format 3\0"), Buffer.alloc(48)]));
+  const zipKind = await classify(zipSample, "file");
+  const sqlKind = await classify(sqlSample, "file");
+  const dbKind = await classify(dbSample, "file");
+  if (zipKind !== "archive" || sqlKind !== "database" || dbKind !== "database") {
+    process.stderr.write(`kind mismatch zip=${zipKind} sql=${sqlKind} db=${dbKind}\n`);
+    process.exit(1);
+  }
+  const zItem = await inspectPath(zipSample);
+  const sItem = await inspectPath(sqlSample);
+  const packed = await packVault([zItem, sItem], join(tmp, "drop.zip"));
+  if (!packed.size || packed.files.length !== 2) {
+    process.stderr.write("packVault failed\n");
+    process.exit(1);
+  }
+} finally {
+  await rm(tmp, { recursive: true, force: true });
+}
+
 console.log(`ok ${files.length} files`);

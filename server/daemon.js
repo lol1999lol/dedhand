@@ -1,3 +1,4 @@
+/** DEDHAND by lol1999lol — https://github.com/lol1999lol/dedhand */
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chmod, mkdir, unlink, writeFile } from "node:fs/promises";
@@ -5,6 +6,7 @@ import { homedir } from "node:os";
 import { startInbox } from "./telegram.js";
 import { startScheduler } from "./scheduler.js";
 import { DATA_DIR, loadState } from "./store.js";
+import { AUTHOR } from "./meta.js";
 import { debug } from "./net.js";
 import { langOf } from "./ops.js";
 import { t } from "./i18n.js";
@@ -18,7 +20,7 @@ export async function runDaemon() {
     process.exit(1);
   }
   process.umask(0o077);
-  debug("daemon", DATA_DIR, "armed", state.armed);
+  debug("daemon", AUTHOR.name, DATA_DIR, "armed", state.armed);
   startScheduler();
   startInbox();
   const stop = () => process.exit(0);

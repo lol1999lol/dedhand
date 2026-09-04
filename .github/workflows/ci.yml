@@ -22,3 +22,4 @@ jobs:
       - run: node bin/dedhand.js version
       - run: node bin/dedhand.js help
       - run: node bin/dedhand.js which
+      - run: node bin/dedhand.js guide

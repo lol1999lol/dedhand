@@ -9,24 +9,27 @@ export const LOCALES = [
 const en = {
   help: `dedhand — headless dead-hand core
   no website · no inbound port · operator-owned channels only
+  by lol1999lol  ·  https://github.com/lol1999lol/dedhand
 
-  setup                 first-time passphrase + telegram
+  guide / quickstart    what to do next (easiest start)
+  setup / init          first-time passphrase + optional telegram
   daemon / tick         long-running core / one watchdog beat
-  install-service       user systemd service + timer
+  install-service       write + enable user systemd units
   uninstall-service     remove those units
-  which                 paths and runtime
+  which                 paths, author, runtime
   export / status --json
   passwd                rotate passphrase
   lang <code> / langs / version
   doctor                health + integrity
-  add <path> / rm <id|path>
+  add <path...> / rm <id|path>
+      zip · sqlite · sql dump · directory
   interval <hours> / warning <minutes>
   message               leak message from stdin
   telegram discord slack mastodon webhook ntfy matrix gotify email
   test <channel>
   arm / checkin / disarm / fire / reset
 
-Telegram:  in <passphrase>
+Daily check-in (default 24h). Telegram:  in <passphrase>
 `,
   unknown_cmd: "Unknown command: {cmd}",
   already_setup: "Already set up.",
@@ -45,7 +48,21 @@ Telegram:  in <passphrase>
   password_weak: "Passphrase needs letters and digits.",
   setup_next: "Next:",
   home: "data home",
-  tg_hint: "Telegram: in <passphrase>",
+  tg_hint: "Telegram check-in: in <passphrase>",
+  guide_done: "All set. Check in before the deadline (default every 24h).",
+  guide_fired: "Already fired. Use reset only if you mean to re-arm.",
+  guide_step_setup: "Create your passphrase",
+  guide_step_add: "Add zip / database / files you own",
+  guide_step_channel: "Enable a channel you own (telegram or ntfy)",
+  guide_step_doctor: "Run doctor",
+  guide_step_arm: "Arm the protocol",
+  guide_step_service: "Keep it running after reboot",
+  guide_step_checkin: "Check in on time",
+  install_ok: "service enabled",
+  install_manual: "systemd not available — run these yourself:",
+  author: "author",
+  repo: "repo",
+  armed_next: "Check in before the deadline. Then: node bin/dedhand.js install-service",
   locked: "Temporarily locked after failed attempts.",
   need_setup: "Run setup first.",
   already_fired: "Already fired. Use reset.",
@@ -63,7 +80,9 @@ Telegram:  in <passphrase>
   disarmed: "disarmed",
   armed: "ARMED",
   reset_ok: "reset ok",
-  added: "added {path}",
+  added: "added {kind}  {path}  {size}",
+  doctor_large: "large {kind} {path} ({size}) — Telegram 49MB / Discord 24MB; file goes out via mirrors or a file channel",
+  doctor_db_live: "database {path} — deletion fires; live writes do not",
   removed: "removed",
   updated: "{name} updated",
   lang_set: "language: {lang}",
@@ -122,16 +141,19 @@ function add(code, overlay) {
 
 add("fa", {
   help: `dedhand — هستهٔ سرور، بدون وب، بدون پورت ورودی
+  اثر lol1999lol  ·  https://github.com/lol1999lol/dedhand
 
-  setup                 برپایی رمز و تلگرام
+  guide / quickstart    قدم بعدی (ساده‌ترین شروع)
+  setup / init          برپایی رمز و تلگرام اختیاری
   daemon                هستهٔ دائم
   tick                  یک ضربان نگهبان
-  install-service       سرویس و تایمر systemd
+  install-service       نوشتن و روشن کردن سرویس systemd
   lang <code>           زبان رابط
   langs                 فهرست زبان‌ها
   doctor                سلامت سیستم
   status / logs
-  add <path> / rm <id|path>
+  add <path...> / rm <id|path>
+      زیپ · sqlite · دامپ sql · پوشه
   interval <hours> / warning <minutes>
   message               پیام انتشار از stdin
   telegram --token --chat
@@ -144,7 +166,7 @@ add("fa", {
   test <channel>
   arm / checkin / disarm / fire / reset
 
-چک‌این تلگرام:  in رمز
+چک‌این روزانه (پیش‌فرض ۲۴ ساعت). تلگرام:  in رمز
 تایمر و دیمِن مستقل‌اند. پورت گوش نمی‌دهد.`,
   unknown_cmd: "دستور ناشناخته: {cmd}",
   already_setup: "قبلاً راه‌اندازی شده.",
@@ -163,7 +185,21 @@ add("fa", {
   password_weak: "رمز باید حرف و رقم داشته باشد.",
   setup_next: "بعدی:",
   home: "خانهٔ داده",
-  tg_hint: "تلگرام: in رمز",
+  tg_hint: "چک‌این تلگرام: in رمز",
+  guide_done: "تمام. قبل از مهلت چک‌این کن (پیش‌فرض هر ۲۴ ساعت).",
+  guide_fired: "قبلاً شلیک شده. فقط اگر می‌خواهی دوباره مسلح کنی reset بزن.",
+  guide_step_setup: "رمز را بساز",
+  guide_step_add: "زیپ / دیتابیس / فایل مال خودت را اضافه کن",
+  guide_step_channel: "یک کانال مال خودت روشن کن (تلگرام یا ntfy)",
+  guide_step_doctor: "doctor را اجرا کن",
+  guide_step_arm: "پروتکل را مسلح کن",
+  guide_step_service: "بعد از ریبوت روشن بماند",
+  guide_step_checkin: "به‌موقع چک‌این کن",
+  install_ok: "سرویس روشن شد",
+  install_manual: "systemd نیست — این دستورها را خودت بزن:",
+  author: "نویسنده",
+  repo: "ریپو",
+  armed_next: "قبل از مهلت چک‌این کن. بعد: node bin/dedhand.js install-service",
   locked: "قفل موقت بعد از تلاش‌های غلط.",
   need_setup: "اول setup را کامل کن.",
   already_fired: "قبلاً شلیک شده. reset کن.",
@@ -181,7 +217,9 @@ add("fa", {
   disarmed: "خنثی شد",
   armed: "مسلح",
   reset_ok: "بازنشانی شد",
-  added: "اضافه شد {path}",
+  added: "اضافه شد {kind}  {path}  {size}",
+  doctor_large: "حجم زیاد {kind} {path} ({size}) — تلگرام ۴۹مگ / دیسکورد ۲۴مگ؛ فایل از آینه یا کانال فایل می‌رود",
+  doctor_db_live: "دیتابیس {path} — حذف شلیک می‌کند؛ نوشتن زنده نه",
   removed: "حذف شد",
   updated: "{name} به‌روز شد",
   lang_set: "زبان: {lang}",
