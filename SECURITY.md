@@ -11,7 +11,7 @@ Dedhand is a **dead-hand daemon for a machine you control**. It publishes files 
 
 ## Report a vulnerability
 
-Open a **private** GitHub security advisory, or email the maintainer listed on the repository. Include Node version, OS, and reproduction steps. Do not attach live vault contents.
+Open a **private** GitHub security advisory on [lol1999lol/dedhand](https://github.com/lol1999lol/dedhand/security/advisories). Include Node version, OS, and reproduction steps. Do not attach live vault contents.
 
 ## Trust model
 

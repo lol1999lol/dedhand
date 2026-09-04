@@ -15,7 +15,7 @@ Miss check-in — or have the vault deleted/altered — and selected files are p
 ## Install
 
 ```bash
-git clone https://github.com/YOU/dedhand.git
+git clone https://github.com/lol1999lol/dedhand.git
 cd dedhand
 npm install
 node bin/dedhand.js setup
@@ -61,6 +61,10 @@ Passphrase: 12+ characters, letters and digits. Arming seals SHA-256 of vault fi
 
 Never commit `data/`. See [SECURITY.md](SECURITY.md).
 
+## Author
+
+**lol1999lol** — https://github.com/lol1999lol
+
 ## License
 
-MIT
+MIT © 2026 [lol1999lol](https://github.com/lol1999lol)
